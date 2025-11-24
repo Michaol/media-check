@@ -592,10 +592,11 @@ show_menu() {
     echo " 1. Check Local IP (IPv4)"
     if [ "$network_type" == "dual" ] || [ "$network_type" == "ipv6" ]; then
         echo " 2. Check Local IP (IPv6)"
-        echo " 3. Check via Proxy (Recommended)"
-        echo " 4. Check via X-Forwarded-For (May not work)"
-        echo " 5. Check Dependencies"
-        echo " 6. Exit"
+        echo " 3. Check Both IPv4 and IPv6"
+        echo " 4. Check via Proxy (Recommended)"
+        echo " 5. Check via X-Forwarded-For (May not work)"
+        echo " 6. Check Dependencies"
+        echo " 7. Exit"
     else
         echo " 2. Check via Proxy (Recommended)"
         echo " 3. Check via X-Forwarded-For (May not work)"
@@ -606,7 +607,7 @@ show_menu() {
     echo -e "${Font_Blue}========================================${Font_Suffix}"
     
     if [ "$network_type" == "dual" ] || [ "$network_type" == "ipv6" ]; then
-        echo -n "Please select [1-6]: "
+        echo -n "Please select [1-7]: "
     else
         echo -n "Please select [1-5]: "
     fi
@@ -616,9 +617,12 @@ run_local_test() {
     echo ""
     echo -e "${Font_Blue}Getting local IP information...${Font_Suffix}"
     
-    local ip=$(get_local_ip)
-    if [ $? -ne 0 ]; then
-        echo -e "${Font_Red}Failed to get local IP${Font_Suffix}"
+    # Force IPv4
+    local ip=$(curl -4 -s --max-time 5 "${IP_QUERY_API}" 2>/dev/null)
+    if [ $? -ne 0 ] || [ -z "$ip" ]; then
+        echo -e "${Font_Red}Failed to get local IPv4 address${Font_Suffix}"
+        echo -n "Press Enter to continue..."
+        read
         return 1
     fi
     
@@ -627,7 +631,7 @@ run_local_test() {
     
     get_ip_info "$ip"
     
-    local curl_opts="--max-time ${DEFAULT_TIMEOUT} --retry ${DEFAULT_RETRY} --retry-max-time ${DEFAULT_MAX_TIME}"
+    local curl_opts="-4 --max-time ${DEFAULT_TIMEOUT} --retry ${DEFAULT_RETRY} --retry-max-time ${DEFAULT_MAX_TIME}"
     
     run_tests "$curl_opts" "Local IP (IPv4)" 0
 }
@@ -649,9 +653,56 @@ run_local_test_v6() {
     
     get_ip_info "$ip"
     
-    local curl_opts="--max-time ${DEFAULT_TIMEOUT} --retry ${DEFAULT_RETRY} --retry-max-time ${DEFAULT_MAX_TIME}"
+    local curl_opts="-6 --max-time ${DEFAULT_TIMEOUT} --retry ${DEFAULT_RETRY} --retry-max-time ${DEFAULT_MAX_TIME}"
     
     run_tests "$curl_opts" "Local IP (IPv6)" 1
+}
+
+run_local_test_dual() {
+    echo ""
+    echo -e "${Font_Blue}========================================${Font_Suffix}"
+    echo -e "${Font_Blue} Testing Both IPv4 and IPv6${Font_Suffix}"
+    echo -e "${Font_Blue}========================================${Font_Suffix}"
+    echo ""
+    
+    # Test IPv4
+    echo -e "${Font_Blue}[1/2] Testing IPv4...${Font_Suffix}"
+    local ipv4=$(curl -4 -s --max-time 5 "${IP_QUERY_API}" 2>/dev/null)
+    if [ -n "$ipv4" ]; then
+        echo -e "${Font_Green}IPv4 Address: ${ipv4}${Font_Suffix}"
+        echo ""
+        get_ip_info "$ipv4"
+        
+        local curl_opts_v4="-4 --max-time ${DEFAULT_TIMEOUT} --retry ${DEFAULT_RETRY} --retry-max-time ${DEFAULT_MAX_TIME}"
+        run_tests "$curl_opts_v4" "IPv4" 0
+    else
+        echo -e "${Font_Red}IPv4 not available${Font_Suffix}"
+        echo ""
+    fi
+    
+    echo ""
+    echo -e "${Font_Blue}----------------------------------------${Font_Suffix}"
+    echo ""
+    
+    # Test IPv6
+    echo -e "${Font_Blue}[2/2] Testing IPv6...${Font_Suffix}"
+    local ipv6=$(get_local_ip_v6)
+    if [ $? -eq 0 ] && [ -n "$ipv6" ]; then
+        echo -e "${Font_Green}IPv6 Address: ${ipv6}${Font_Suffix}"
+        echo ""
+        get_ip_info "$ipv6"
+        
+        local curl_opts_v6="-6 --max-time ${DEFAULT_TIMEOUT} --retry ${DEFAULT_RETRY} --retry-max-time ${DEFAULT_MAX_TIME}"
+        run_tests "$curl_opts_v6" "IPv6" 1
+    else
+        echo -e "${Font_Red}IPv6 not available${Font_Suffix}"
+        echo ""
+    fi
+    
+    echo ""
+    echo -e "${Font_Blue}========================================${Font_Suffix}"
+    echo -e "${Font_Green} Dual Stack Testing Complete${Font_Suffix}"
+    echo -e "${Font_Blue}========================================${Font_Suffix}"
 }
 
 run_proxy_test() {
@@ -755,7 +806,7 @@ main() {
         
         # Handle menu based on network type
         if [ "$network_type" == "dual" ] || [ "$network_type" == "ipv6" ]; then
-            # Dual stack or IPv6 only menu (6 options)
+            # Dual stack or IPv6 only menu (7 options)
             case $choice in
                 1)
                     run_local_test
@@ -768,22 +819,27 @@ main() {
                     read
                     ;;
                 3)
-                    run_proxy_test
+                    run_local_test_dual
                     echo -n "Press Enter to continue..."
                     read
                     ;;
                 4)
-                    run_xforward_test
+                    run_proxy_test
                     echo -n "Press Enter to continue..."
                     read
                     ;;
                 5)
+                    run_xforward_test
+                    echo -n "Press Enter to continue..."
+                    read
+                    ;;
+                6)
                     check_dependencies
                     echo ""
                     echo -n "Press Enter to continue..."
                     read
                     ;;
-                6)
+                7)
                     echo ""
                     echo -e "${Font_Green}Goodbye!${Font_Suffix}"
                     echo ""
