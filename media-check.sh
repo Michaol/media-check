@@ -218,6 +218,50 @@ detect_network_interfaces() {
     fi
 }
 
+download_disney_cookie() {
+    # Create cache directory if it doesn't exist
+    if [ ! -d "$CACHE_DIR" ]; then
+        mkdir -p "$CACHE_DIR" 2>/dev/null
+    fi
+    
+    # Check if cache exists and is valid
+    if [ -f "$DISNEY_COOKIE_CACHE" ]; then
+        local cache_age=$(($(date +%s) - $(stat -c %Y "$DISNEY_COOKIE_CACHE" 2>/dev/null || stat -f %m "$DISNEY_COOKIE_CACHE" 2>/dev/null || echo 0)))
+        if [ "$cache_age" -lt "$CACHE_EXPIRY" ]; then
+            DISNEY_COOKIE=$(cat "$DISNEY_COOKIE_CACHE")
+            if [ -n "$DISNEY_COOKIE" ]; then
+                echo -e "${Font_Green}Using cached Disney+ cookie data (age: $((cache_age / 3600))h)${Font_Suffix}"
+                return 0
+            fi
+        fi
+    fi
+    
+    # Try to download from external source (latest data)
+    echo -e "${Font_Blue}Downloading latest Disney+ cookie data from GitHub...${Font_Suffix}"
+    local external_cookie=$(curl -s --max-time 10 "https://raw.githubusercontent.com/lmc999/RegionRestrictionCheck/main/cookies" 2>/dev/null)
+    
+    if [ -n "$external_cookie" ] && [ ${#external_cookie} -gt 100 ]; then
+        # External download successful
+        DISNEY_COOKIE="$external_cookie"
+        echo "$DISNEY_COOKIE" > "$DISNEY_COOKIE_CACHE" 2>/dev/null
+        echo -e "${Font_Green}✓ Downloaded latest Disney+ cookie data from GitHub${Font_Suffix}"
+        return 0
+    else
+        # External download failed, use embedded data as fallback
+        echo -e "${Font_Yellow}⚠ Failed to download from GitHub, using embedded cookie data${Font_Suffix}"
+        DISNEY_COOKIE="$DISNEY_COOKIE_DATA"
+        
+        if [ -z "$DISNEY_COOKIE" ]; then
+            echo -e "${Font_Red}Error: Disney+ cookie data not available${Font_Suffix}"
+            return 1
+        fi
+        
+        # Save embedded data to cache
+        echo "$DISNEY_COOKIE" > "$DISNEY_COOKIE_CACHE" 2>/dev/null
+        echo -e "${Font_Green}✓ Using embedded Disney+ cookie data (fallback)${Font_Suffix}"
+        return 0
+    fi
+}
 
 # ============================================
 # Streaming Service Detection Functions
@@ -311,39 +355,100 @@ test_disneyplus() {
         curl_opts="-6 $curl_opts"
     fi
 
-    # Method from RegionRestrictionCheck
-    local auth_token=$(curl ${curl_opts} -s 'https://disney.api.edge.bamgrid.com/graph/v1/device/graphql' \
-        -H 'content-type: application/json' \
-        -d '{"query":"mutation registerDevice($input: RegisterDeviceInput!) { registerDevice(registerDevice: $input) { grant { grantType assertion } } }","variables":{"input":{"applicationRuntime":"chrome","attributes":{"osName":"Windows","osVersion":"10.0.0"},"deviceFamily":"browser","deviceProfile":"windows"}}}' \
-        --user-agent "${UA_BROWSER}" 2>/dev/null | grep -oP '"assertion":"\K[^"]+')
+    if [ -z "$DISNEY_COOKIE" ]; then
+        echo -e "${Font_Red}Failed (Cookie data not available)${Font_Suffix}"
+        return
+    fi
 
-    if [ -z "$auth_token" ]; then
+    # Step 1: Device registration
+    local device_resp=$(curl ${curl_opts} -s "${DISNEY_DEVICE_API}" \
+        -X POST \
+        -H "authorization: Bearer ${DISNEY_BEARER_TOKEN}" \
+        -H "content-type: application/json; charset=UTF-8" \
+        -d '{"deviceFamily":"browser","applicationRuntime":"chrome","deviceProfile":"windows","attributes":{}}' \
+        --user-agent "${UA_BROWSER}" 2>/dev/null)
+
+    if [ -z "$device_resp" ]; then
         echo -e "${Font_Red}Failed (Network Connection)${Font_Suffix}"
         return
     fi
 
-    local access_token=$(curl ${curl_opts} -s 'https://disney.api.edge.bamgrid.com/token' \
-        -d "grant_type=urn:ietf:params:oauth:grant-type:token-exchange&subject_token=${auth_token}&subject_token_type=urn:bamtech:params:oauth:token-type:device" \
-        --user-agent "${UA_BROWSER}" 2>/dev/null | grep -oP '"access_token":"\K[^"]+')
-
-    if [ -z "$access_token" ]; then
+    local is403=$(echo "$device_resp" | grep -i '403 ERROR')
+    if [ -n "$is403" ]; then
         echo -e "${Font_Red}No (IP Banned)${Font_Suffix}"
         return
     fi
 
-    local region_data=$(curl ${curl_opts} -s 'https://disney.api.edge.bamgrid.com/graph/v1/device/graphql' \
-        -H "authorization: Bearer ${access_token}" \
-        -H 'content-type: application/json' \
-        -d '{"query":"query { currentDevice { location { countryCode } } }"}' \
+    local assertion=$(echo "$device_resp" | grep -oP '"assertion"\s*:\s*"\K[^"]+')
+    if [ -z "$assertion" ]; then
+        echo -e "${Font_Red}Failed (Device Registration Error)${Font_Suffix}"
+        return
+    fi
+
+    # Step 2: Get token
+    local pre_cookie=$(echo "$DISNEY_COOKIE" | sed -n '1p')
+    local cookie_data=$(echo "$pre_cookie" | sed "s/DISNEYASSERTION/${assertion}/g")
+    
+    local token_resp=$(curl ${curl_opts} -s "${DISNEY_TOKEN_API}" \
+        -X POST \
+        -H "authorization: Bearer ${DISNEY_BEARER_TOKEN}" \
+        -d "${cookie_data}" \
         --user-agent "${UA_BROWSER}" 2>/dev/null)
 
-    local country=$(echo "$region_data" | grep -oP '"countryCode":"\K[^"]+')
-    
-    if [ -n "$country" ]; then
-        echo -e "${Font_Green}Yes (Region: ${country})${Font_Suffix}"
-    else
-        echo -e "${Font_Red}No${Font_Suffix}"
+    local is_blocked=$(echo "$token_resp" | grep -i 'forbidden-location')
+    local is403=$(echo "$token_resp" | grep -i '403 ERROR')
+
+    if [ -n "$is_blocked" ] || [ -n "$is403" ]; then
+        echo -e "${Font_Red}No (IP Banned)${Font_Suffix}"
+        return
     fi
+
+    local refresh_token=$(echo "$token_resp" | grep -oP '"refresh_token"\s*:\s*"\K[^"]+')
+    if [ -z "$refresh_token" ]; then
+        echo -e "${Font_Red}Failed (Token Error)${Font_Suffix}"
+        return
+    fi
+
+    # Step 3: Query region
+    local fake_content=$(echo "$DISNEY_COOKIE" | sed -n '8p')
+    local graph_data=$(echo "$fake_content" | sed "s/ILOVEDISNEY/${refresh_token}/g")
+    
+    local region_resp=$(curl ${curl_opts} -sL "${DISNEY_GRAPH_API}" \
+        -X POST \
+        -H "authorization: ${DISNEY_BEARER_TOKEN}" \
+        -d "${graph_data}" \
+        --user-agent "${UA_BROWSER}" 2>/dev/null)
+
+    # Step 4: Check availability
+    local preview_check=$(curl ${curl_opts} -sL "${DISNEY_HOME_URL}" \
+        -w '%{url_effective}\n' -o /dev/null \
+        --user-agent "${UA_BROWSER}" 2>/dev/null)
+    
+    local is_unavailable=$(echo "$preview_check" | grep -E 'preview|unavailable')
+    local country=$(echo "$region_resp" | grep -oP '"countryCode"\s*:\s*"\K[^"]+')
+    local supported=$(echo "$region_resp" | grep -oP '"inSupportedLocation"\s*:\s*\K(true|false)')
+
+    if [ -z "$country" ]; then
+        echo -e "${Font_Red}No${Font_Suffix}"
+        return
+    fi
+
+    if [ -n "$is_unavailable" ]; then
+        echo -e "${Font_Red}No${Font_Suffix}"
+        return
+    fi
+
+    if [ "$supported" == "false" ]; then
+        echo -e "${Font_Yellow}Available For [Disney+ ${country}] Soon${Font_Suffix}"
+        return
+    fi
+
+    if [ "$supported" == "true" ]; then
+        echo -e "${Font_Green}Yes (Region: ${country})${Font_Suffix}"
+        return
+    fi
+
+    echo -e "${Font_Red}Failed (Unknown Error)${Font_Suffix}"
 }
 
 test_hbomax() {
@@ -358,7 +463,7 @@ test_hbomax() {
     fi
 
     local resp=$(curl ${curl_opts} -sLi "${HBOMAX_HOME_URL}" \
-        -w "_TAG_%{http_code}_TAG_" \
+        -w "_TAG_%{http_code}" \
         --user-agent "${UA_BROWSER}" 2>/dev/null)
 
     local http_code=$(echo "$resp" | grep '_TAG_' | awk -F'_TAG_' '{print $2}')
@@ -542,23 +647,23 @@ show_menu() {
     unset iface_list
     declare -a iface_list
     
-    local index=1
+    local index=0
     # Read line by line into array
     while IFS= read -r line; do
         if [ -n "$line" ]; then
             iface_list[$index]="$line"
-            echo -e "  ${Font_Green}$index.${Font_Suffix} ${Font_Yellow}$line${Font_Suffix}"
+            echo -e "  ${Font_Green}$((index+1)).${Font_Suffix} ${Font_Yellow}$line${Font_Suffix}"
             ((index++))
         fi
     done <<< "$interfaces_str"
     
-    local exit_option=$index
+    local exit_option=$((index+1))
     echo ""
     echo -e "${Font_Blue} Other Options:${Font_Suffix}"
     echo -e "  ${Font_Green}$exit_option.${Font_Suffix} Exit"
     echo ""
     echo -e "${Font_Blue}========================================${Font_Suffix}"
-    echo -n "Select interface [1-$((index-1))] or option [$exit_option]: "
+    echo -n "Select interface [1-$index] or option [$exit_option]: "
     
     # Store interface list and exit option for main function
     # We must export or use global variables since this is running in the same shell
@@ -578,11 +683,14 @@ main() {
         exit 1
     fi
 
+    # Download Disney+ cookie data before entering loop
+    download_disney_cookie
+
     # Main loop
     while true; do
         # Global arrays for interface list
-        declare -a IFACE_LIST
-        EXIT_OPTION=0
+        unset IFACE_LIST
+        unset EXIT_OPTION
         
         show_menu
         read choice
@@ -596,8 +704,8 @@ main() {
         fi
         
         # Check if it's a valid interface number
-        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -lt "$EXIT_OPTION" ]; then
-            local selected_iface="${IFACE_LIST[$choice]}"
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le $((EXIT_OPTION-1)) ]; then
+            local selected_iface="${IFACE_LIST[$((choice-1))]}"
             if [ -n "$selected_iface" ]; then
                 run_interface_test "$selected_iface"
                 echo -n "Press Enter to continue..."

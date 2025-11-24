@@ -2,7 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.2] - 2025-11-24
+
+### Fixed
+- **Interface Selection**: Fixed a critical bug where selecting an interface (e.g., option 1) would test a different interface due to incorrect array indexing.
+- **Disney+ Detection**: Reverted to the v1.2.0 detection method (downloading cookies from GitHub) as the new API-based method was unstable.
+- **Stability**: Improved robustness of the main loop and interface handling.
+
 ## [1.3.1] - 2025-11-24
+
 
 ### Fixed
 - **Interface Selection**: Fixed a bug where selecting an interface might test a different one.
