@@ -7,10 +7,10 @@
 # ============================================
 # Auto-download config.sh for one-click execution
 # ============================================
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if [ ! -f "${SCRIPT_DIR}/config.sh" ]; then
-    # Running in one-click mode, download config.sh
+# Detect if running in one-click mode (from stdin/pipe)
+if [ ! -t 0 ] || [[ "${BASH_SOURCE[0]}" == */dev/fd/* ]] || [[ "${BASH_SOURCE[0]}" == *bash* ]]; then
+    # One-click execution mode - download config.sh
     CONFIG_URL="https://raw.githubusercontent.com/Michaol/media-check/main/config.sh"
     TEMP_CONFIG="/tmp/media-check-config-$$.sh"
     
@@ -24,8 +24,14 @@ if [ ! -f "${SCRIPT_DIR}/config.sh" ]; then
         exit 1
     fi
 else
-    # Load configuration from local file
-    source "${SCRIPT_DIR}/config.sh"
+    # Local execution mode - load from script directory
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if [ -f "${SCRIPT_DIR}/config.sh" ]; then
+        source "${SCRIPT_DIR}/config.sh"
+    else
+        echo "Error: config.sh not found in ${SCRIPT_DIR}"
+        exit 1
+    fi
 fi
 
 # ============================================
