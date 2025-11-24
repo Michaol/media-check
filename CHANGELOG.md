@@ -2,7 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.1] - 2025-11-24
+
+### Fixed
+- **Interface Selection**: Fixed a bug where selecting an interface might test a different one.
+- **IP Info**: Fixed IP information display (Country/ISP/City) by switching to a more reliable API.
+- **Disney+ Detection**: Reverted to the original detection method to ensure accuracy.
+
 ## [1.3.0] - 2025-11-24
+
 
 ### Added
 - **Smart Network Interface Selection**: Automatically detects and lists available network interfaces (e.g., eth0, warp).
