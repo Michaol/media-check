@@ -283,25 +283,122 @@ download_disney_cookie() {
         if [ "$cache_age" -lt "$CACHE_EXPIRY" ]; then
             DISNEY_COOKIE=$(cat "$DISNEY_COOKIE_CACHE")
             if [ -n "$DISNEY_COOKIE" ]; then
-                echo -e "${Font_Green}Using cached Disney+ cookie data${Font_Suffix}"
+                echo -e "${Font_Green}Using cached Disney+ cookie data (age: $((cache_age / 3600))h)${Font_Suffix}"
                 return 0
             fi
         fi
     fi
     
-    # Use embedded cookie data
-    DISNEY_COOKIE="$DISNEY_COOKIE_DATA"
+    # Try to download from external source (latest data)
+    echo -e "${Font_Blue}Downloading latest Disney+ cookie data from GitHub...${Font_Suffix}"
+    local external_cookie=$(curl -s --max-time 10 "https://raw.githubusercontent.com/lmc999/RegionRestrictionCheck/main/cookies" 2>/dev/null)
     
-    if [ -z "$DISNEY_COOKIE" ]; then
-        echo -e "${Font_Red}Error: Disney+ cookie data not available${Font_Suffix}"
+    if [ -n "$external_cookie" ] && [ ${#external_cookie} -gt 100 ]; then
+        # External download successful
+        DISNEY_COOKIE="$external_cookie"
+        echo "$DISNEY_COOKIE" > "$DISNEY_COOKIE_CACHE" 2>/dev/null
+        echo -e "${Font_Green}✓ Downloaded latest Disney+ cookie data from GitHub${Font_Suffix}"
+        return 0
+    else
+        # External download failed, use embedded data as fallback
+        echo -e "${Font_Yellow}⚠ Failed to download from GitHub, using embedded cookie data${Font_Suffix}"
+        DISNEY_COOKIE="$DISNEY_COOKIE_DATA"
+        
+        if [ -z "$DISNEY_COOKIE" ]; then
+            echo -e "${Font_Red}Error: Disney+ cookie data not available${Font_Suffix}"
+            return 1
+        fi
+        
+        # Save embedded data to cache
+        echo "$DISNEY_COOKIE" > "$DISNEY_COOKIE_CACHE" 2>/dev/null
+        echo -e "${Font_Green}✓ Using embedded Disney+ cookie data (fallback)${Font_Suffix}"
+        return 0
+    fi
+}
+
+# ============================================
+# Network Interface Detection and Selection
+# ============================================
+
+detect_network_interfaces() {
+    if command -v ip >/dev/null 2>&1; then
+        ip -o addr show | grep -v "scope host" | awk '{
+            iface=$2; addr=$4; split(addr, a, "/"); ip=a[1]
+            if (iface != "lo" && ip != "127.0.0.1" && ip != "::1") print iface ":" ip
+        }' | sort -u
+    elif command -v ifconfig >/dev/null 2>&1; then
+        ifconfig | awk '
+            /^[a-z]/ {iface=$1; gsub(/:/, "", iface)}
+            /inet / && iface != "lo" {print iface ":" $2}
+            /inet6 / && iface != "lo" && $2 !~ /^fe80/ {print iface ":" $2}
+        ' | grep -v "127.0.0.1" | grep -v "::1"
+    fi
+}
+
+show_interface_menu() {
+    echo ""
+    echo -e "${Font_Blue}========================================${Font_Suffix}"
+    echo -e "${Font_Blue} Network Interface Selection${Font_Suffix}"
+    echo -e "${Font_Blue}========================================${Font_Suffix}"
+    echo ""
+    
+    local interfaces=$(detect_network_interfaces)
+    if [ -z "$interfaces" ]; then
+        echo -e "${Font_Red}No network interfaces detected${Font_Suffix}"
+        echo -n "Press Enter to continue..."
+        read
         return 1
     fi
     
-    # Save to cache
-    echo "$DISNEY_COOKIE" > "$DISNEY_COOKIE_CACHE" 2>/dev/null
+    local -a iface_list ip_list
+    local index=1
     
-    echo -e "${Font_Green}Disney+ cookie data loaded successfully${Font_Suffix}"
-    return 0
+    while IFS=: read -r iface ip; do
+        iface_list[$index]="$iface"
+        ip_list[$index]="$ip"
+        [[ "$ip" =~ : ]] && local ip_type="IPv6" || local ip_type="IPv4"
+        echo -e " ${Font_Green}$index.${Font_Suffix} ${Font_Yellow}$iface${Font_Suffix} - $ip ($ip_type)"
+        ((index++))
+    done <<< "$interfaces"
+    
+    echo ""
+    echo -e " ${Font_Green}0.${Font_Suffix} Back to main menu"
+    echo ""
+    echo -e "${Font_Blue}========================================${Font_Suffix}"
+    echo -n "Select interface [0-$((index-1))]: "
+    read selection
+    
+    if [ "$selection" == "0" ]; then
+        return 0
+    elif [ "$selection" -ge 1 ] && [ "$selection" -lt "$index" ]; then
+        echo ""
+        echo -e "${Font_Green}Selected: ${iface_list[$selection]} (${ip_list[$selection]})${Font_Suffix}"
+        echo ""
+        run_interface_test "${iface_list[$selection]}" "${ip_list[$selection]}"
+        echo -n "Press Enter to continue..."
+        read
+    else
+        echo -e "${Font_Red}Invalid selection${Font_Suffix}"
+        echo -n "Press Enter to continue..."
+        read
+    fi
+}
+
+run_interface_test() {
+    local interface="$1" ip="$2"
+    echo -e "${Font_Blue}Testing with interface: ${Font_Yellow}$interface${Font_Suffix}"
+    echo -e "${Font_Blue}IP Address: ${Font_Yellow}$ip${Font_Suffix}"
+    echo ""
+    
+    local use_ipv6=0
+    [[ "$ip" =~ : ]] && use_ipv6=1
+    
+    get_ip_info "$ip"
+    
+    local curl_opts="--interface $interface --max-time ${DEFAULT_TIMEOUT} --retry ${DEFAULT_RETRY} --retry-max-time ${DEFAULT_MAX_TIME}"
+    [ "$use_ipv6" == "1" ] && curl_opts="-6 $curl_opts" || curl_opts="-4 $curl_opts"
+    
+    run_tests "$curl_opts" "Interface: $interface" "$use_ipv6"
 }
 
 
@@ -593,23 +690,25 @@ show_menu() {
     if [ "$network_type" == "dual" ] || [ "$network_type" == "ipv6" ]; then
         echo " 2. Check Local IP (IPv6)"
         echo " 3. Check Both IPv4 and IPv6"
-        echo " 4. Check via Proxy (Recommended)"
-        echo " 5. Check via X-Forwarded-For (May not work)"
-        echo " 6. Check Dependencies"
-        echo " 7. Exit"
+        echo " 4. Select Network Interface"
+        echo " 5. Check via Proxy (Recommended)"
+        echo " 6. Check via X-Forwarded-For (May not work)"
+        echo " 7. Check Dependencies"
+        echo " 8. Exit"
     else
-        echo " 2. Check via Proxy (Recommended)"
-        echo " 3. Check via X-Forwarded-For (May not work)"
-        echo " 4. Check Dependencies"
-        echo " 5. Exit"
+        echo " 2. Select Network Interface"
+        echo " 3. Check via Proxy (Recommended)"
+        echo " 4. Check via X-Forwarded-For (May not work)"
+        echo " 5. Check Dependencies"
+        echo " 6. Exit"
     fi
     echo ""
     echo -e "${Font_Blue}========================================${Font_Suffix}"
     
     if [ "$network_type" == "dual" ] || [ "$network_type" == "ipv6" ]; then
-        echo -n "Please select [1-7]: "
+        echo -n "Please select [1-8]: "
     else
-        echo -n "Please select [1-5]: "
+        echo -n "Please select [1-6]: "
     fi
 }
 
@@ -806,7 +905,7 @@ main() {
         
         # Handle menu based on network type
         if [ "$network_type" == "dual" ] || [ "$network_type" == "ipv6" ]; then
-            # Dual stack or IPv6 only menu (7 options)
+            # Dual stack or IPv6 only menu (8 options)
             case $choice in
                 1)
                     run_local_test
@@ -824,22 +923,25 @@ main() {
                     read
                     ;;
                 4)
+                    show_interface_menu
+                    ;;
+                5)
                     run_proxy_test
                     echo -n "Press Enter to continue..."
                     read
                     ;;
-                5)
+                6)
                     run_xforward_test
                     echo -n "Press Enter to continue..."
                     read
                     ;;
-                6)
+                7)
                     check_dependencies
                     echo ""
                     echo -n "Press Enter to continue..."
                     read
                     ;;
-                7)
+                8)
                     echo ""
                     echo -e "${Font_Green}Goodbye!${Font_Suffix}"
                     echo ""
@@ -853,7 +955,7 @@ main() {
                     ;;
             esac
         else
-            # IPv4 only menu (5 options)
+            # IPv4 only menu (6 options)
             case $choice in
                 1)
                     run_local_test
@@ -861,22 +963,25 @@ main() {
                     read
                     ;;
                 2)
+                    show_interface_menu
+                    ;;
+                3)
                     run_proxy_test
                     echo -n "Press Enter to continue..."
                     read
                     ;;
-                3)
+                4)
                     run_xforward_test
                     echo -n "Press Enter to continue..."
                     read
                     ;;
-                4)
+                5)
                     check_dependencies
                     echo ""
                     echo -n "Press Enter to continue..."
                     read
                     ;;
-                5)
+                6)
                     echo ""
                     echo -e "${Font_Green}Goodbye!${Font_Suffix}"
                     echo ""
