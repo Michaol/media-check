@@ -526,18 +526,20 @@ run_interface_test() {
     
     # Get IPv4 address for this interface
     local ipv4=""
+    # Strip any '@' suffix from interface name for ip/ifconfig commands
+    local iface_base="${interface%%@*}"
     if command -v ip >/dev/null 2>&1; then
-        ipv4=$(ip -4 addr show "$interface" 2>/dev/null | grep -oP 'inet \K[\d.]+' | head -1)
+        ipv4=$(ip -4 addr show "$iface_base" 2>/dev/null | grep -oP 'inet \K[\d.]+' | head -1)
     elif command -v ifconfig >/dev/null 2>&1; then
-        ipv4=$(ifconfig "$interface" 2>/dev/null | grep 'inet ' | awk '{print $2}' | head -1)
+        ipv4=$(ifconfig "$iface_base" 2>/dev/null | grep 'inet ' | awk '{print $2}' | head -1)
     fi
     
     # Get IPv6 address for this interface
     local ipv6=""
     if command -v ip >/dev/null 2>&1; then
-        ipv6=$(ip -6 addr show "$interface" 2>/dev/null | grep -oP 'inet6 \K[0-9a-f:]+' | grep -v '^fe80' | head -1)
+        ipv6=$(ip -6 addr show "$iface_base" 2>/dev/null | grep -oP 'inet6 \K[0-9a-f:]+' | grep -v '^fe80' | head -1)
     elif command -v ifconfig >/dev/null 2>&1; then
-        ipv6=$(ifconfig "$interface" 2>/dev/null | grep 'inet6 ' | awk '{print $2}' | grep -v '^fe80' | head -1)
+        ipv6=$(ifconfig "$iface_base" 2>/dev/null | grep 'inet6 ' | awk '{print $2}' | grep -v '^fe80' | head -1)
     fi
     
     # Test IPv4 if available
