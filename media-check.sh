@@ -4,9 +4,29 @@
 # A simplified tool to check Netflix, Disney+, and HBO Max unlock status
 # Based on RegionRestrictionCheck project
 
-# Load configuration
+# ============================================
+# Auto-download config.sh for one-click execution
+# ============================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/config.sh"
+
+if [ ! -f "${SCRIPT_DIR}/config.sh" ]; then
+    # Running in one-click mode, download config.sh
+    CONFIG_URL="https://raw.githubusercontent.com/Michaol/media-check/main/config.sh"
+    TEMP_CONFIG="/tmp/media-check-config-$$.sh"
+    
+    echo "Downloading config.sh..."
+    if curl -fsSL "$CONFIG_URL" -o "$TEMP_CONFIG" 2>/dev/null; then
+        source "$TEMP_CONFIG"
+        # Clean up on exit
+        trap "rm -f $TEMP_CONFIG" EXIT
+    else
+        echo "Error: Failed to download config.sh"
+        exit 1
+    fi
+else
+    # Load configuration from local file
+    source "${SCRIPT_DIR}/config.sh"
+fi
 
 # ============================================
 # Color Definitions
