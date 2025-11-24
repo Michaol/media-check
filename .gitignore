@@ -1,0 +1,29 @@
+# Git ignore file for media-check project
+
+# Temporary files
+*.tmp
+*.log
+*.swp
+*~
+
+# Backup files
+*.bak
+*.backup
+
+# Cookie files
+*_cookie.txt
+bahamut_cookie.txt
+
+# OS specific
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.sublime-*
+
+# Test output
+test_results/
+output/
