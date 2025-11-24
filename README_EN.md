@@ -5,13 +5,12 @@ A simplified streaming service unlock detection tool based on [RegionRestriction
 ## Features
 
 - ✅ **Three Major Services**: Netflix, Disney+, and HBO Max
-- ✅ **Local IP Detection**: Automatically check your current IP (IPv4 and IPv6)
-- ✅ **IPv6 Support**: Full IPv6 support for all streaming services
-- ✅ **Proxy Support**: Test via SOCKS5/HTTP proxy (recommended)
-- ✅ **X-Forwarded-For**: Alternative method (may not work for all services)
+- ✅ **Smart Network Detection**: Automatically identifies all network interfaces
+- ✅ **Auto Dual-Stack**: Automatically tests IPv4 and IPv6
+- ✅ **Detailed Info**: Auto-fetches public IP, Country, ISP, and City
 - ✅ **Cross-Platform**: Works on Linux, macOS, Windows (Git Bash/MinGW)
 - ✅ **No Root Required**: Pure bash implementation
-- ✅ **No External Dependencies**: All data embedded, works offline
+- ✅ **Smart Cookie Management**: Prioritizes cloud data with embedded fallback
 
 ## Quick Start
 
@@ -93,95 +92,30 @@ bash media-check.sh
 You'll see:
 ```
 ========================================
-  Media Unlock Checker v1.1.0
+  Media Unlock Checker v1.3.0
 ========================================
 
  Network: IPv4 + IPv6 (Dual Stack)
 
- 1. Check Local IP (IPv4)
- 2. Check Local IP (IPv6)
- 3. Check via Proxy (Recommended)
- 4. Check via X-Forwarded-For (May not work)
- 5. Check Dependencies
- 6. Exit
+ Available Interfaces:
+  1. eth0
+  2. eth1
+  3. warp
+
+ Other Options:
+  4. Exit
 
 ========================================
-Please select [1-6]:
+Select interface [1-3] or option [4]:
 ```
 
-**Note**: The menu automatically adapts based on your network configuration:
-- **Dual Stack** (IPv4 + IPv6): Shows 6 options with both IPv4 and IPv6 tests
-- **IPv4 Only**: Shows 5 options with IPv4 tests only
-- **IPv6 Only**: Shows 6 options with IPv6 tests
+### Automatic Testing Flow
 
-### Option 1: Check Local IP
-
-Automatically detects your current public IP and tests all three services.
-
-**Example output:**
-```
-Local IP: 1.2.3.4
-Country: US
-ISP: Example ISP
-City: New York
-
-========================================
- Running Tests (Local IP)
-========================================
- Netflix:                   ✓ Yes (Region: US)
- Disney+:                   ✓ Yes (Region: US)
- HBO Max:                   ✓ Yes (Region: US)
-========================================
-```
-
-### Option 2: Check via Proxy (Recommended)
-
-Test streaming unlock status through a proxy server. This is the most accurate method for testing remote IPs.
-
-**Supported proxy formats:**
-- `socks5://127.0.0.1:1080`
-- `http://proxy.example.com:8080`
-- `socks5://user:pass@proxy.example.com:1080`
-
-**Example:**
-```
-Enter proxy address: socks5://192.168.1.100:1080
-
-Proxy IP: 8.8.8.8
-Country: US
-ISP: Google LLC
-City: Mountain View
-
-========================================
- Running Tests (Proxy)
-========================================
- Netflix:                   ✓ Yes (Region: US)
- Disney+:                   ✓ Yes (Region: US)
- HBO Max:                   ✓ Yes (Region: US)
-========================================
-```
-
-### Option 3: Check via X-Forwarded-For
-
-⚠️ **Warning**: This method adds an `X-Forwarded-For` header to HTTP requests, but most streaming services ignore this header for security reasons. Results may not be accurate.
-
-**Example:**
-```
-Enter target IP address: 8.8.8.8
-
-Target IP: 8.8.8.8
-Country: US
-ISP: Google LLC
-City: Mountain View
-
-========================================
- Running Tests (X-Forwarded-For)
-========================================
- Netflix:                   ✗ Failed (Results may be inaccurate)
- Disney+:                   ✗ Failed (Results may be inaccurate)
- HBO Max:                   ✗ Failed (Results may be inaccurate)
-========================================
-```
+After selecting an interface, the script will automatically:
+1. **Get IP Info**: Detect IPv4/IPv6 addresses for the interface
+2. **Query Public Info**: Fetch public IP, location, ISP, and city
+3. **Dual-Stack Test**: Automatically test both IPv4 and IPv6 if available
+4. **Streaming Check**: Check unlock status for Netflix, Disney+, and HBO Max
 
 ### Option 4: Check Dependencies
 

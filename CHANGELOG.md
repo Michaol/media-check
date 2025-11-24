@@ -2,57 +2,45 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.1.0] - 2024-11-24
+## [1.3.0] - 2025-11-24
 
 ### Added
-- **Full IPv6 Support**: All three streaming services now support IPv6 detection
-  - Added `get_local_ip_v6()` function for IPv6 address retrieval
-  - Added `detect_network_type()` function to auto-detect network configuration
-  - Added `run_local_test_v6()` function for IPv6 local IP testing
-  - Dynamic menu that adapts based on network type (IPv4/IPv6/Dual Stack)
-  
-- **Embedded Disney+ Cookie Data**: Removed external GitHub dependency
-  - Disney+ cookie data now embedded in `config.sh`
-  - Added local caching mechanism (`~/.cache/media-check/`)
-  - Cache expiry set to 24 hours
-  - Automatic fallback to embedded data if cache fails
-
-- **Enhanced Error Handling**:
-  - Netflix: Added HTTP status code checking (403 detection for IP blocks)
-  - Disney+: Improved error messages for each authentication step
-  - HBO Max: Better network error detection
-  - All services: Distinguish between network errors and service errors
+- **Smart Network Interface Selection**: Automatically detects and lists available network interfaces (e.g., eth0, warp).
+- **Auto Dual-Stack Testing**: Automatically detects if an interface supports IPv4 and IPv6, and tests both if available.
+- **Auto Public IP Detection**: Automatically fetches public IP, Country, ISP, and City information for the selected interface.
+- **Simplified Menu**: Streamlined user interface with direct interface selection.
 
 ### Changed
-- **Updated User-Agent**: Chrome 125 → Chrome 131
-  - `UA_BROWSER`: Updated to Chrome 131.0.0.0
-  - `UA_ANDROID`: Updated to Android 14 with Pixel 8
-  - `UA_SEC_CH_UA`: Updated version strings
+- **Menu Structure**: Removed separate IPv4/IPv6/Proxy/XFF options in favor of a unified interface-based workflow.
+- **Dependency Management**: Disney+ cookie data is now downloaded from the cloud with a local fallback, ensuring up-to-date detection.
+- **Code Optimization**: Removed redundant functions and improved network detection logic.
 
-- **Improved Detection Logic**:
-  - Netflix: Now checks HTTP status codes in addition to page content
-  - HBO Max: Removed hardcoded "US" from supported countries list
-  - All services: Accept IPv6 flag parameter for proper IPv6 testing
+### Removed
+- **Manual IP/Proxy Input**: Removed manual Proxy and X-Forwarded-For testing options to simplify the user experience.
+- **Manual Dependency Check**: Dependency check is now performed automatically at startup.
 
-- **Version Bump**: 1.0.0 → 1.1.0
+## [1.1.0] - 2025-11-24
+
+### Added
+- **IPv6 Support**: Full support for IPv6 detection across all services (Netflix, Disney+, HBO Max).
+- **Dual Stack Detection**: Automatically detects if the system supports both IPv4 and IPv6.
+- **Embedded Disney+ Cookie**: Cookie data is now embedded in the script, removing the runtime dependency on external files.
+- **One-Click Execution**: Added support for `curl | bash` style execution.
+- **Chinese Documentation**: Added `README_CN.md` and made it the default documentation.
+
+### Changed
+- **User-Agent**: Updated to Chrome 131 for better compatibility.
+- **Menu System**: Dynamic menu that adapts to the network environment (IPv4/IPv6/Dual Stack).
+- **Error Handling**: Improved error messages and retry logic for network requests.
 
 ### Fixed
-- Disney+ detection no longer depends on external GitHub repository
-- HBO Max now correctly extracts all supported countries from API response
-- Network type detection works correctly on all platforms
-- Cache directory creation handles permission errors gracefully
+- **Netflix Detection**: Improved reliability of Netflix region detection.
+- **Disney+ Detection**: Fixed issues with token generation and region checks.
 
-### Technical Details
-- Added `ENABLE_IPV6` configuration option (default: enabled)
-- Added `CACHE_DIR` and `DISNEY_COOKIE_CACHE` configuration
-- Modified `run_tests()` to accept IPv6 flag parameter
-- Updated all test functions (`test_netflix`, `test_disneyplus`, `test_hbomax`) to support IPv6
+## [1.0.0] - 2025-11-23
 
-## [1.0.0] - 2024-11-23
-
-### Initial Release
-- Basic Netflix, Disney+, and HBO Max detection
-- IPv4 support
-- Proxy and X-Forwarded-For methods
-- Cross-platform compatibility
-- Interactive menu system
+### Added
+- Initial release.
+- Support for Netflix, Disney+, and HBO Max.
+- Basic local IP detection (IPv4).
+- Proxy support.

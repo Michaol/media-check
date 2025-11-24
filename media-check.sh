@@ -48,8 +48,6 @@ color_print() {
     Font_White="\033[37m"
     Font_Suffix="\033[0m"
 }
-
-# Initialize colors
 color_print
 
 # ============================================
@@ -57,79 +55,18 @@ color_print
 # ============================================
 
 command_exists() {
-    command -v "$1" > /dev/null 2>&1
+    command -v "$1" >/dev/null 2>&1
 }
 
 gen_uuid() {
-    if [ -f /proc/sys/kernel/random/uuid ]; then
-        cat /proc/sys/kernel/random/uuid
-        return 0
-    fi
-
     if command_exists uuidgen; then
         uuidgen
-        return 0
+    elif [ -f /proc/sys/kernel/random/uuid ]; then
+        cat /proc/sys/kernel/random/uuid
+    else
+        # Fallback UUID generation
+        echo "$(date +%s)-$(od -x /dev/urandom | head -1 | awk '{print $2$3$4$5}')"
     fi
-
-    if command_exists powershell; then
-        powershell -c "[guid]::NewGuid().ToString()"
-        return 0
-    fi
-
-    echo -e "${Font_Red}Error: Unable to generate UUID${Font_Suffix}"
-    return 1
-}
-
-validate_ip_address() {
-    if [ -z "$1" ]; then
-        echo -e "${Font_Red}Error: IP Address is missing${Font_Suffix}"
-        return 1
-    fi
-
-    local ip="$1"
-
-    # Check IPv4
-    if echo "$ip" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$'; then
-        # Validate each octet
-        local valid=1
-        IFS='.' read -ra OCTETS <<< "$ip"
-        for octet in "${OCTETS[@]}"; do
-            if [ "$octet" -gt 255 ]; then
-                valid=0
-                break
-            fi
-        done
-        if [ "$valid" -eq 1 ]; then
-            return 4  # IPv4
-        fi
-    fi
-
-    # Check IPv6
-    if echo "$ip" | grep -Eq '^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$|^::([0-9a-fA-F]{0,4}:){0,6}[0-9a-fA-F]{0,4}$|^([0-9a-fA-F]{0,4}:){1,7}:$'; then
-        return 6  # IPv6
-    fi
-
-    echo -e "${Font_Red}Error: Invalid IP address format${Font_Suffix}"
-    return 1
-}
-
-validate_proxy() {
-    if [ -z "$1" ]; then
-        echo -e "${Font_Red}Error: Proxy address is missing${Font_Suffix}"
-        return 1
-    fi
-
-    local proxy="$1"
-
-    # Check proxy format: protocol://[user:pass@]host:port
-    if echo "$proxy" | grep -Eq '^(socks|socks4|socks5|http|https)://([^:]+:[^@]+@)?([0-9a-fA-F.:]+|[a-zA-Z0-9.-]+):[0-9]{1,5}$'; then
-        return 0
-    fi
-
-    echo -e "${Font_Red}Error: Invalid proxy format${Font_Suffix}"
-    echo -e "${Font_Yellow}Expected format: protocol://[user:pass@]host:port${Font_Suffix}"
-    echo -e "${Font_Yellow}Example: socks5://127.0.0.1:1080 or http://user:pass@proxy.com:8080${Font_Suffix}"
-    return 1
 }
 
 check_dependencies() {
@@ -247,7 +184,6 @@ detect_network_type() {
     fi
 }
 
-
 get_ip_info() {
     local ip="$1"
     if [ -z "$ip" ]; then
@@ -269,6 +205,16 @@ get_ip_info() {
     echo "ISP: ${isp:-Unknown}"
     echo "City: ${city:-Unknown}"
     return 0
+}
+
+detect_network_interfaces() {
+    if command -v ip >/dev/null 2>&1; then
+        # Get all interfaces (excluding lo)
+        ip -o link show | awk -F': ' '{print $2}' | grep -v '^lo$' | sort -u
+    elif command -v ifconfig >/dev/null 2>&1; then
+        # Get all interfaces (excluding lo)
+        ifconfig | awk '/^[a-z]/ {iface=$1; gsub(/:/, "", iface); if (iface != "lo") print iface}' | sort -u
+    fi
 }
 
 download_disney_cookie() {
@@ -315,92 +261,6 @@ download_disney_cookie() {
         return 0
     fi
 }
-
-# ============================================
-# Network Interface Detection and Selection
-# ============================================
-
-detect_network_interfaces() {
-    if command -v ip >/dev/null 2>&1; then
-        ip -o addr show | grep -v "scope host" | awk '{
-            iface=$2; addr=$4; split(addr, a, "/"); ip=a[1]
-            if (iface != "lo" && ip != "127.0.0.1" && ip != "::1") print iface ":" ip
-        }' | sort -u
-    elif command -v ifconfig >/dev/null 2>&1; then
-        ifconfig | awk '
-            /^[a-z]/ {iface=$1; gsub(/:/, "", iface)}
-            /inet / && iface != "lo" {print iface ":" $2}
-            /inet6 / && iface != "lo" && $2 !~ /^fe80/ {print iface ":" $2}
-        ' | grep -v "127.0.0.1" | grep -v "::1"
-    fi
-}
-
-show_interface_menu() {
-    echo ""
-    echo -e "${Font_Blue}========================================${Font_Suffix}"
-    echo -e "${Font_Blue} Network Interface Selection${Font_Suffix}"
-    echo -e "${Font_Blue}========================================${Font_Suffix}"
-    echo ""
-    
-    local interfaces=$(detect_network_interfaces)
-    if [ -z "$interfaces" ]; then
-        echo -e "${Font_Red}No network interfaces detected${Font_Suffix}"
-        echo -n "Press Enter to continue..."
-        read
-        return 1
-    fi
-    
-    local -a iface_list ip_list
-    local index=1
-    
-    while IFS=: read -r iface ip; do
-        iface_list[$index]="$iface"
-        ip_list[$index]="$ip"
-        [[ "$ip" =~ : ]] && local ip_type="IPv6" || local ip_type="IPv4"
-        echo -e " ${Font_Green}$index.${Font_Suffix} ${Font_Yellow}$iface${Font_Suffix} - $ip ($ip_type)"
-        ((index++))
-    done <<< "$interfaces"
-    
-    echo ""
-    echo -e " ${Font_Green}0.${Font_Suffix} Back to main menu"
-    echo ""
-    echo -e "${Font_Blue}========================================${Font_Suffix}"
-    echo -n "Select interface [0-$((index-1))]: "
-    read selection
-    
-    if [ "$selection" == "0" ]; then
-        return 0
-    elif [ "$selection" -ge 1 ] && [ "$selection" -lt "$index" ]; then
-        echo ""
-        echo -e "${Font_Green}Selected: ${iface_list[$selection]} (${ip_list[$selection]})${Font_Suffix}"
-        echo ""
-        run_interface_test "${iface_list[$selection]}" "${ip_list[$selection]}"
-        echo -n "Press Enter to continue..."
-        read
-    else
-        echo -e "${Font_Red}Invalid selection${Font_Suffix}"
-        echo -n "Press Enter to continue..."
-        read
-    fi
-}
-
-run_interface_test() {
-    local interface="$1" ip="$2"
-    echo -e "${Font_Blue}Testing with interface: ${Font_Yellow}$interface${Font_Suffix}"
-    echo -e "${Font_Blue}IP Address: ${Font_Yellow}$ip${Font_Suffix}"
-    echo ""
-    
-    local use_ipv6=0
-    [[ "$ip" =~ : ]] && use_ipv6=1
-    
-    get_ip_info "$ip"
-    
-    local curl_opts="--interface $interface --max-time ${DEFAULT_TIMEOUT} --retry ${DEFAULT_RETRY} --retry-max-time ${DEFAULT_MAX_TIME}"
-    [ "$use_ipv6" == "1" ] && curl_opts="-6 $curl_opts" || curl_opts="-4 $curl_opts"
-    
-    run_tests "$curl_opts" "Interface: $interface" "$use_ipv6"
-}
-
 
 # ============================================
 # Streaming Service Detection Functions
@@ -654,28 +514,105 @@ run_tests() {
     echo ""
 }
 
+run_interface_test() {
+    local interface="$1"
+    
+    echo ""
+    echo -e "${Font_Blue}========================================${Font_Suffix}"
+    echo -e "${Font_Blue} Testing Interface: ${Font_Yellow}$interface${Font_Suffix}"
+    echo -e "${Font_Blue}========================================${Font_Suffix}"
+    echo ""
+    
+    # Get IPv4 address for this interface
+    local ipv4=""
+    if command -v ip >/dev/null 2>&1; then
+        ipv4=$(ip -4 addr show "$interface" 2>/dev/null | grep -oP 'inet \K[\d.]+' | head -1)
+    elif command -v ifconfig >/dev/null 2>&1; then
+        ipv4=$(ifconfig "$interface" 2>/dev/null | grep 'inet ' | awk '{print $2}' | head -1)
+    fi
+    
+    # Get IPv6 address for this interface
+    local ipv6=""
+    if command -v ip >/dev/null 2>&1; then
+        ipv6=$(ip -6 addr show "$interface" 2>/dev/null | grep -oP 'inet6 \K[0-9a-f:]+' | grep -v '^fe80' | head -1)
+    elif command -v ifconfig >/dev/null 2>&1; then
+        ipv6=$(ifconfig "$interface" 2>/dev/null | grep 'inet6 ' | awk '{print $2}' | grep -v '^fe80' | head -1)
+    fi
+    
+    # Test IPv4 if available
+    if [ -n "$ipv4" ]; then
+        echo -e "${Font_Blue}[IPv4 Test]${Font_Suffix}"
+        echo -e "Local IP: ${Font_Green}$ipv4${Font_Suffix}"
+        echo ""
+        
+        # Get public IP via this interface
+        echo -e "${Font_Blue}Getting public IP information...${Font_Suffix}"
+        local public_ipv4=$(curl -4 --interface "$interface" -s --max-time 5 "${IP_QUERY_API}" 2>/dev/null)
+        
+        if [ -n "$public_ipv4" ]; then
+            echo -e "Public IP: ${Font_Green}$public_ipv4${Font_Suffix}"
+            get_ip_info "$public_ipv4"
+        else
+            echo -e "${Font_Red}Failed to get public IP${Font_Suffix}"
+        fi
+        
+        echo ""
+        local curl_opts="-4 --interface $interface --max-time ${DEFAULT_TIMEOUT} --retry ${DEFAULT_RETRY} --retry-max-time ${DEFAULT_MAX_TIME}"
+        run_tests "$curl_opts" "Interface: $interface (IPv4)" 0
+        echo ""
+    fi
+    
+    # Test IPv6 if available
+    if [ -n "$ipv6" ]; then
+        echo -e "${Font_Blue}[IPv6 Test]${Font_Suffix}"
+        echo -e "Local IP: ${Font_Green}$ipv6${Font_Suffix}"
+        echo ""
+        
+        # Get public IP via this interface
+        echo -e "${Font_Blue}Getting public IP information...${Font_Suffix}"
+        local public_ipv6=$(curl -6 --interface "$interface" -s --max-time 5 "${IP_QUERY_API_V6}" 2>/dev/null)
+        
+        if [ -n "$public_ipv6" ]; then
+            echo -e "Public IP: ${Font_Green}$public_ipv6${Font_Suffix}"
+            get_ip_info "$public_ipv6"
+        else
+            echo -e "${Font_Red}Failed to get public IP${Font_Suffix}"
+        fi
+        
+        echo ""
+        local curl_opts="-6 --interface $interface --max-time ${DEFAULT_TIMEOUT} --retry ${DEFAULT_RETRY} --retry-max-time ${DEFAULT_MAX_TIME}"
+        run_tests "$curl_opts" "Interface: $interface (IPv6)" 1
+        echo ""
+    fi
+    
+    if [ -z "$ipv4" ] && [ -z "$ipv6" ]; then
+        echo -e "${Font_Red}No IP address found on interface $interface${Font_Suffix}"
+        echo ""
+    fi
+    
+    echo -e "${Font_Blue}========================================${Font_Suffix}"
+}
+
 # ============================================
 # Main Menu and Control
 # ============================================
 
 show_menu() {
-    clear
-    
     # Detect network type
     local network_type=$(detect_network_type)
     local network_info=""
     
-    case "$network_type" in
+    case $network_type in
         "dual")
             network_info="${Font_Green}IPv4 + IPv6 (Dual Stack)${Font_Suffix}"
             ;;
         "ipv4")
-            network_info="${Font_Blue}IPv4 Only${Font_Suffix}"
+            network_info="${Font_Green}IPv4 Only${Font_Suffix}"
             ;;
         "ipv6")
-            network_info="${Font_Blue}IPv6 Only${Font_Suffix}"
+            network_info="${Font_Green}IPv6 Only${Font_Suffix}"
             ;;
-        "none")
+        *)
             network_info="${Font_Red}No Network${Font_Suffix}"
             ;;
     esac
@@ -686,198 +623,43 @@ show_menu() {
     echo ""
     echo -e " Network: ${network_info}"
     echo ""
-    echo " 1. Check Local IP (IPv4)"
-    if [ "$network_type" == "dual" ] || [ "$network_type" == "ipv6" ]; then
-        echo " 2. Check Local IP (IPv6)"
-        echo " 3. Check Both IPv4 and IPv6"
-        echo " 4. Select Network Interface"
-        echo " 5. Check via Proxy (Recommended)"
-        echo " 6. Check via X-Forwarded-For (May not work)"
-        echo " 7. Check Dependencies"
-        echo " 8. Exit"
-    else
-        echo " 2. Select Network Interface"
-        echo " 3. Check via Proxy (Recommended)"
-        echo " 4. Check via X-Forwarded-For (May not work)"
-        echo " 5. Check Dependencies"
-        echo " 6. Exit"
+    
+    # Detect and display network interfaces
+    echo -e "${Font_Blue} Available Interfaces:${Font_Suffix}"
+    local interfaces=$(detect_network_interfaces)
+    
+    if [ -z "$interfaces" ]; then
+        echo -e "  ${Font_Red}No interfaces detected${Font_Suffix}"
+        echo ""
+        echo -e "${Font_Blue}========================================${Font_Suffix}"
+        echo ""
+        echo " 1. Exit"
+        echo ""
+        echo -e "${Font_Blue}========================================${Font_Suffix}"
+        echo -n "Please select [1]: "
+        return
     fi
+    
+    local -a iface_list
+    local index=1
+    
+    while read -r iface; do
+        iface_list[$index]="$iface"
+        echo -e "  ${Font_Green}$index.${Font_Suffix} ${Font_Yellow}$iface${Font_Suffix}"
+        ((index++))
+    done <<< "$interfaces"
+    
+    local exit_option=$index
+    echo ""
+    echo -e "${Font_Blue} Other Options:${Font_Suffix}"
+    echo -e "  ${Font_Green}$exit_option.${Font_Suffix} Exit"
     echo ""
     echo -e "${Font_Blue}========================================${Font_Suffix}"
+    echo -n "Select interface [1-$((index-1))] or option [$exit_option]: "
     
-    if [ "$network_type" == "dual" ] || [ "$network_type" == "ipv6" ]; then
-        echo -n "Please select [1-8]: "
-    else
-        echo -n "Please select [1-6]: "
-    fi
-}
-
-run_local_test() {
-    echo ""
-    echo -e "${Font_Blue}Getting local IP information...${Font_Suffix}"
-    
-    # Force IPv4
-    local ip=$(curl -4 -s --max-time 5 "${IP_QUERY_API}" 2>/dev/null)
-    if [ $? -ne 0 ] || [ -z "$ip" ]; then
-        echo -e "${Font_Red}Failed to get local IPv4 address${Font_Suffix}"
-        echo -n "Press Enter to continue..."
-        read
-        return 1
-    fi
-    
-    echo -e "${Font_Green}Local IP: ${ip}${Font_Suffix}"
-    echo ""
-    
-    get_ip_info "$ip"
-    
-    local curl_opts="-4 --max-time ${DEFAULT_TIMEOUT} --retry ${DEFAULT_RETRY} --retry-max-time ${DEFAULT_MAX_TIME}"
-    
-    run_tests "$curl_opts" "Local IP (IPv4)" 0
-}
-
-run_local_test_v6() {
-    echo ""
-    echo -e "${Font_Blue}Getting local IPv6 information...${Font_Suffix}"
-    
-    local ip=$(get_local_ip_v6)
-    if [ $? -ne 0 ]; then
-        echo -e "${Font_Red}Failed to get local IPv6 address${Font_Suffix}"
-        echo -n "Press Enter to continue..."
-        read
-        return 1
-    fi
-    
-    echo -e "${Font_Green}Local IPv6: ${ip}${Font_Suffix}"
-    echo ""
-    
-    get_ip_info "$ip"
-    
-    local curl_opts="-6 --max-time ${DEFAULT_TIMEOUT} --retry ${DEFAULT_RETRY} --retry-max-time ${DEFAULT_MAX_TIME}"
-    
-    run_tests "$curl_opts" "Local IP (IPv6)" 1
-}
-
-run_local_test_dual() {
-    echo ""
-    echo -e "${Font_Blue}========================================${Font_Suffix}"
-    echo -e "${Font_Blue} Testing Both IPv4 and IPv6${Font_Suffix}"
-    echo -e "${Font_Blue}========================================${Font_Suffix}"
-    echo ""
-    
-    # Test IPv4
-    echo -e "${Font_Blue}[1/2] Testing IPv4...${Font_Suffix}"
-    local ipv4=$(curl -4 -s --max-time 5 "${IP_QUERY_API}" 2>/dev/null)
-    if [ -n "$ipv4" ]; then
-        echo -e "${Font_Green}IPv4 Address: ${ipv4}${Font_Suffix}"
-        echo ""
-        get_ip_info "$ipv4"
-        
-        local curl_opts_v4="-4 --max-time ${DEFAULT_TIMEOUT} --retry ${DEFAULT_RETRY} --retry-max-time ${DEFAULT_MAX_TIME}"
-        run_tests "$curl_opts_v4" "IPv4" 0
-    else
-        echo -e "${Font_Red}IPv4 not available${Font_Suffix}"
-        echo ""
-    fi
-    
-    echo ""
-    echo -e "${Font_Blue}----------------------------------------${Font_Suffix}"
-    echo ""
-    
-    # Test IPv6
-    echo -e "${Font_Blue}[2/2] Testing IPv6...${Font_Suffix}"
-    local ipv6=$(get_local_ip_v6)
-    if [ $? -eq 0 ] && [ -n "$ipv6" ]; then
-        echo -e "${Font_Green}IPv6 Address: ${ipv6}${Font_Suffix}"
-        echo ""
-        get_ip_info "$ipv6"
-        
-        local curl_opts_v6="-6 --max-time ${DEFAULT_TIMEOUT} --retry ${DEFAULT_RETRY} --retry-max-time ${DEFAULT_MAX_TIME}"
-        run_tests "$curl_opts_v6" "IPv6" 1
-    else
-        echo -e "${Font_Red}IPv6 not available${Font_Suffix}"
-        echo ""
-    fi
-    
-    echo ""
-    echo -e "${Font_Blue}========================================${Font_Suffix}"
-    echo -e "${Font_Green} Dual Stack Testing Complete${Font_Suffix}"
-    echo -e "${Font_Blue}========================================${Font_Suffix}"
-}
-
-run_proxy_test() {
-    echo ""
-    echo -e "${Font_Yellow}Proxy format examples:${Font_Suffix}"
-    echo "  socks5://127.0.0.1:1080"
-    echo "  http://proxy.example.com:8080"
-    echo "  socks5://user:pass@proxy.example.com:1080"
-    echo ""
-    echo -n "Enter proxy address (or 'q' to quit): "
-    read proxy_addr
-    
-    if [ "$proxy_addr" == "q" ] || [ "$proxy_addr" == "Q" ]; then
-        return 0
-    fi
-    
-    if ! validate_proxy "$proxy_addr"; then
-        echo ""
-        echo -e "${Font_Red}Invalid proxy address${Font_Suffix}"
-        echo -n "Press Enter to continue..."
-        read
-        return 1
-    fi
-    
-    echo ""
-    echo -e "${Font_Blue}Testing proxy connection...${Font_Suffix}"
-    
-    local test_ip=$(curl -x "$proxy_addr" -s --max-time 5 "${IP_QUERY_API}" 2>/dev/null)
-    if [ -z "$test_ip" ]; then
-        echo -e "${Font_Red}Failed to connect via proxy${Font_Suffix}"
-        echo -n "Press Enter to continue..."
-        read
-        return 1
-    fi
-    
-    echo -e "${Font_Green}Proxy IP: ${test_ip}${Font_Suffix}"
-    echo ""
-    
-    get_ip_info "$test_ip"
-    
-    local curl_opts="-x $proxy_addr --max-time ${DEFAULT_TIMEOUT} --retry ${DEFAULT_RETRY} --retry-max-time ${DEFAULT_MAX_TIME}"
-    
-    run_tests "$curl_opts" "Proxy"
-}
-
-run_xforward_test() {
-    echo ""
-    echo -e "${Font_Yellow}WARNING: X-Forwarded-For method may not work for most streaming services!${Font_Suffix}"
-    echo -e "${Font_Yellow}Most services ignore this header for security reasons.${Font_Suffix}"
-    echo ""
-    echo -n "Enter target IP address (or 'q' to quit): "
-    read target_ip
-    
-    if [ "$target_ip" == "q" ] || [ "$target_ip" == "Q" ]; then
-        return 0
-    fi
-    
-    validate_ip_address "$target_ip"
-    local result=$?
-    
-    if [ "$result" -ne 4 ] && [ "$result" -ne 6 ]; then
-        echo -e "${Font_Red}Invalid IP address${Font_Suffix}"
-        echo -n "Press Enter to continue..."
-        read
-        return 1
-    fi
-    
-    echo ""
-    echo -e "${Font_Blue}Target IP: ${target_ip}${Font_Suffix}"
-    echo ""
-    
-    get_ip_info "$target_ip"
-    
-    local curl_opts="--header X-Forwarded-For:$target_ip --max-time ${DEFAULT_TIMEOUT} --retry ${DEFAULT_RETRY} --retry-max-time ${DEFAULT_MAX_TIME}"
-    
-    run_tests "$curl_opts" "X-Forwarded-For (Results may be inaccurate)"
+    # Store interface list and exit option for main function
+    IFACE_LIST=("${iface_list[@]}")
+    EXIT_OPTION=$exit_option
 }
 
 main() {
@@ -897,103 +679,39 @@ main() {
 
     # Main loop
     while true; do
+        # Global arrays for interface list
+        declare -a IFACE_LIST
+        EXIT_OPTION=0
+        
         show_menu
         read choice
         
-        # Detect network type for dynamic menu handling
-        local network_type=$(detect_network_type)
+        # Check if it's the exit option
+        if [ "$choice" == "$EXIT_OPTION" ]; then
+            echo ""
+            echo -e "${Font_Green}Goodbye!${Font_Suffix}"
+            echo ""
+            exit 0
+        fi
         
-        # Handle menu based on network type
-        if [ "$network_type" == "dual" ] || [ "$network_type" == "ipv6" ]; then
-            # Dual stack or IPv6 only menu (8 options)
-            case $choice in
-                1)
-                    run_local_test
-                    echo -n "Press Enter to continue..."
-                    read
-                    ;;
-                2)
-                    run_local_test_v6
-                    echo -n "Press Enter to continue..."
-                    read
-                    ;;
-                3)
-                    run_local_test_dual
-                    echo -n "Press Enter to continue..."
-                    read
-                    ;;
-                4)
-                    show_interface_menu
-                    ;;
-                5)
-                    run_proxy_test
-                    echo -n "Press Enter to continue..."
-                    read
-                    ;;
-                6)
-                    run_xforward_test
-                    echo -n "Press Enter to continue..."
-                    read
-                    ;;
-                7)
-                    check_dependencies
-                    echo ""
-                    echo -n "Press Enter to continue..."
-                    read
-                    ;;
-                8)
-                    echo ""
-                    echo -e "${Font_Green}Goodbye!${Font_Suffix}"
-                    echo ""
-                    exit 0
-                    ;;
-                *)
-                    echo ""
-                    echo -e "${Font_Red}Invalid selection${Font_Suffix}"
-                    echo -n "Press Enter to continue..."
-                    read
-                    ;;
-            esac
+        # Check if it's a valid interface number
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -lt "$EXIT_OPTION" ]; then
+            local selected_iface="${IFACE_LIST[$choice]}"
+            if [ -n "$selected_iface" ]; then
+                run_interface_test "$selected_iface"
+                echo -n "Press Enter to continue..."
+                read
+            else
+                echo ""
+                echo -e "${Font_Red}Invalid selection${Font_Suffix}"
+                echo -n "Press Enter to continue..."
+                read
+            fi
         else
-            # IPv4 only menu (6 options)
-            case $choice in
-                1)
-                    run_local_test
-                    echo -n "Press Enter to continue..."
-                    read
-                    ;;
-                2)
-                    show_interface_menu
-                    ;;
-                3)
-                    run_proxy_test
-                    echo -n "Press Enter to continue..."
-                    read
-                    ;;
-                4)
-                    run_xforward_test
-                    echo -n "Press Enter to continue..."
-                    read
-                    ;;
-                5)
-                    check_dependencies
-                    echo ""
-                    echo -n "Press Enter to continue..."
-                    read
-                    ;;
-                6)
-                    echo ""
-                    echo -e "${Font_Green}Goodbye!${Font_Suffix}"
-                    echo ""
-                    exit 0
-                    ;;
-                *)
-                    echo ""
-                    echo -e "${Font_Red}Invalid selection${Font_Suffix}"
-                    echo -n "Press Enter to continue..."
-                    read
-                    ;;
-            esac
+            echo ""
+            echo -e "${Font_Red}Invalid selection${Font_Suffix}"
+            echo -n "Press Enter to continue..."
+            read
         fi
     done
 }
