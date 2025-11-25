@@ -1,3 +1,8 @@
+## [1.3.4] - 2025-11-25
+
+### Fixed
+- **IPv6-only VPS Support**: Fixed network connection issues on IPv6-only VPS (e.g., EUserv) by correcting the interface binding in curl commands. Now uses the base interface name (stripped of `@` suffix) for `--interface` parameter.
+
 ## [1.3.3] - 2025-11-24
 
 ### Fixed

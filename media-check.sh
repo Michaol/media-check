@@ -550,7 +550,7 @@ run_interface_test() {
         
         # Get public IP via this interface
         echo -e "${Font_Blue}Getting public IP information...${Font_Suffix}"
-        local public_ipv4=$(curl -4 --interface "$interface" -s --max-time 5 "${IP_QUERY_API}" 2>/dev/null)
+        local public_ipv4=$(curl -4 --interface "$iface_base" -s --max-time 5 "${IP_QUERY_API}" 2>/dev/null)
         
         if [ -n "$public_ipv4" ]; then
             echo -e "Public IP: ${Font_Green}$public_ipv4${Font_Suffix}"
@@ -560,7 +560,7 @@ run_interface_test() {
         fi
         
         echo ""
-        local curl_opts="-4 --interface $interface --max-time ${DEFAULT_TIMEOUT} --retry ${DEFAULT_RETRY} --retry-max-time ${DEFAULT_MAX_TIME}"
+        local curl_opts="-4 --interface $iface_base --max-time ${DEFAULT_TIMEOUT} --retry ${DEFAULT_RETRY} --retry-max-time ${DEFAULT_MAX_TIME}"
         run_tests "$curl_opts" "Interface: $interface (IPv4)" 0
         echo ""
     fi
@@ -573,7 +573,7 @@ run_interface_test() {
         
         # Get public IP via this interface
         echo -e "${Font_Blue}Getting public IP information...${Font_Suffix}"
-        local public_ipv6=$(curl -6 --interface "$interface" -s --max-time 5 "${IP_QUERY_API_V6}" 2>/dev/null)
+        local public_ipv6=$(curl -6 --interface "$iface_base" -s --max-time 5 "${IP_QUERY_API_V6}" 2>/dev/null)
         
         if [ -n "$public_ipv6" ]; then
             echo -e "Public IP: ${Font_Green}$public_ipv6${Font_Suffix}"
@@ -583,7 +583,7 @@ run_interface_test() {
         fi
         
         echo ""
-        local curl_opts="-6 --interface $interface --max-time ${DEFAULT_TIMEOUT} --retry ${DEFAULT_RETRY} --retry-max-time ${DEFAULT_MAX_TIME}"
+        local curl_opts="-6 --interface $iface_base --max-time ${DEFAULT_TIMEOUT} --retry ${DEFAULT_RETRY} --retry-max-time ${DEFAULT_MAX_TIME}"
         run_tests "$curl_opts" "Interface: $interface (IPv6)" 1
         echo ""
     fi

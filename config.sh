@@ -3,7 +3,7 @@
 # Configuration file for Media Unlock Checker
 
 # Version
-VERSION='1.3.3'
+VERSION='1.3.4'
 
 # User-Agent strings (Updated to Chrome 131)
 UA_BROWSER="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
