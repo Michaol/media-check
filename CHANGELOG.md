@@ -1,3 +1,7 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
 ## [1.3.4] - 2025-11-25
 
 ### Fixed
@@ -6,11 +10,7 @@
 ## [1.3.3] - 2025-11-24
 
 ### Fixed
-- **Version Bump**: Updated to v1.3.3.
-- **Cleanup**: Removed obsolete files and ensured repository only contains necessary scripts.
-
-
-All notable changes to this project will be documented in this file.
+- **Cleanup**: Removed obsolete files (`interface-functions.sh`, `validate.sh`) and ensured repository only contains necessary scripts.
 
 ## [1.3.2] - 2025-11-24
 
@@ -21,14 +21,12 @@ All notable changes to this project will be documented in this file.
 
 ## [1.3.1] - 2025-11-24
 
-
 ### Fixed
 - **Interface Selection**: Fixed a bug where selecting an interface might test a different one.
 - **IP Info**: Fixed IP information display (Country/ISP/City) by switching to a more reliable API.
 - **Disney+ Detection**: Reverted to the original detection method to ensure accuracy.
 
 ## [1.3.0] - 2025-11-24
-
 
 ### Added
 - **Smart Network Interface Selection**: Automatically detects and lists available network interfaces (e.g., eth0, warp).
