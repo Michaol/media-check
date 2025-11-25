@@ -1,4 +1,9 @@
-# Changelog
+## [1.3.3] - 2025-11-24
+
+### Fixed
+- **Version Bump**: Updated to v1.3.3.
+- **Cleanup**: Removed obsolete files and ensured repository only contains necessary scripts.
+
 
 All notable changes to this project will be documented in this file.
 
