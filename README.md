@@ -4,7 +4,7 @@
 
 ## 功能特性
 
-- ✅ **三大流媒体服务**: Netflix、Disney+ 和 HBO Max
+- ✅ **四大流媒体服务**: Netflix、Disney+、HBO Max 和 Amazon Prime Video
 - ✅ **智能网络检测**: 自动识别所有网络接口
 - ✅ **自动双栈测试**: 自动检测并测试 IPv4 和 IPv6
 - ✅ **详细信息显示**: 自动获取公网 IP、国家、ISP 和城市信息
@@ -27,7 +27,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Michaol/media-check/main/med
 
 ```
 ========================================
-  Media Unlock Checker v1.3.4
+  Media Unlock Checker v1.4.0
 ========================================
 
  Network: IPv4 + IPv6 (Dual Stack)
@@ -40,10 +40,11 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Michaol/media-check/main/med
   3. Exit
 
 ========================================
-Select interface [1-2] or option [3]: 
+Select interface [1-2] or option [3]:
 ```
 
 选择一个接口（如 `1`），脚本会自动：
+
 1. 检测该接口的 IPv4/IPv6 地址
 2. 获取公网 IP 和地理信息
 3. 测试 Netflix、Disney+、HBO Max 的解锁状态
@@ -53,16 +54,19 @@ Select interface [1-2] or option [3]:
 大部分 Linux 系统已预装所需工具。如果提示缺少依赖：
 
 **Ubuntu/Debian:**
+
 ```bash
 sudo apt install curl grep sed gawk uuid-runtime
 ```
 
 **RHEL/CentOS/Fedora:**
+
 ```bash
 sudo dnf install curl grep sed gawk util-linux
 ```
 
 **macOS:**
+
 ```bash
 brew install grep coreutils
 ```
@@ -77,11 +81,11 @@ brew install grep coreutils
 
 查看 [CHANGELOG.md](CHANGELOG.md) 了解详细的版本变更历史。
 
-### 最新版本 v1.3.4 (2025-11-25)
+### 最新版本 v1.4.0 (2026-01-16)
 
-- ✅ 修复 IPv6-only VPS 支持（如 EUserv）
-- ✅ 优化接口绑定逻辑
-- ✅ 提升网络连接稳定性
+- ✅ 新增 Amazon Prime Video 区域检测
+- ✅ 改进临时文件安全性
+- ✅ 优化用户输入处理
 
 ## 致谢
 

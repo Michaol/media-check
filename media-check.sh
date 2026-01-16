@@ -12,7 +12,7 @@
 if [ ! -t 0 ] || [[ "${BASH_SOURCE[0]}" == */dev/fd/* ]] || [[ "${BASH_SOURCE[0]}" == *bash* ]]; then
     # One-click execution mode - download config.sh
     CONFIG_URL="https://raw.githubusercontent.com/Michaol/media-check/main/config.sh"
-    TEMP_CONFIG="/tmp/media-check-config-$$.sh"
+    TEMP_CONFIG=$(mktemp /tmp/media-check-config-XXXXXX.sh)
     
     echo "Downloading config.sh..."
     if curl -fsSL "$CONFIG_URL" -o "$TEMP_CONFIG" 2>/dev/null; then
@@ -240,7 +240,7 @@ download_disney_cookie() {
     echo -e "${Font_Blue}Downloading latest Disney+ cookie data from GitHub...${Font_Suffix}"
     local external_cookie=$(curl -s --max-time 10 "https://raw.githubusercontent.com/lmc999/RegionRestrictionCheck/main/cookies" 2>/dev/null)
     
-    if [ -n "$external_cookie" ] && [ ${#external_cookie} -gt 100 ]; then
+    if [ -n "$external_cookie" ] && [ ${#external_cookie} -gt $MIN_COOKIE_LENGTH ]; then
         # External download successful
         DISNEY_COOKIE="$external_cookie"
         echo "$DISNEY_COOKIE" > "$DISNEY_COOKIE_CACHE" 2>/dev/null
@@ -493,6 +493,45 @@ test_hbomax() {
     echo -e "${Font_Red}No${Font_Suffix}"
 }
 
+test_primevideo() {
+    local curl_opts="$1"
+    local use_ipv6="$2"
+    
+    echo -n -e " Prime Video:\t\t\t"
+    
+    # Prime Video does not currently support IPv6
+    if [ "$use_ipv6" == "1" ]; then
+        echo -e "${Font_Red}IPv6 Not Supported${Font_Suffix}"
+        return
+    fi
+
+    local tmpresult=$(curl ${curl_opts} -sL "${PRIMEVIDEO_HOME_URL}" \
+        --user-agent "${UA_BROWSER}" 2>/dev/null)
+    
+    if [ -z "$tmpresult" ]; then
+        echo -e "${Font_Red}Failed (Network Connection)${Font_Suffix}"
+        return
+    fi
+
+    local isBlocked=$(echo "$tmpresult" | grep -i 'isServiceRestricted')
+    local region=$(echo "$tmpresult" | grep -oP '"currentTerritory":"\K[^"]+' | head -n 1)
+
+    if [ -z "$isBlocked" ] && [ -z "$region" ]; then
+        echo -e "${Font_Red}Failed (Page Error)${Font_Suffix}"
+        return
+    fi
+    if [ -n "$isBlocked" ]; then
+        echo -e "${Font_Red}No (Service Restricted)${Font_Suffix}"
+        return
+    fi
+    if [ -n "$region" ]; then
+        echo -e "${Font_Green}Yes (Region: ${region})${Font_Suffix}"
+        return
+    fi
+
+    echo -e "${Font_Red}Failed (Unknown Error)${Font_Suffix}"
+}
+
 # ============================================
 # Test Execution Functions
 # ============================================
@@ -510,6 +549,7 @@ run_tests() {
     test_netflix "$curl_opts" "$use_ipv6"
     test_disneyplus "$curl_opts" "$use_ipv6"
     test_hbomax "$curl_opts" "$use_ipv6"
+    test_primevideo "$curl_opts" "$use_ipv6"
     
     echo -e "${Font_Blue}========================================${Font_Suffix}"
     echo ""
@@ -696,6 +736,11 @@ main() {
         
         show_menu
         read choice
+        
+        # Handle empty input
+        if [ -z "$choice" ]; then
+            continue
+        fi
         
         # Check if it's the exit option
         if [ "$choice" == "$EXIT_OPTION" ]; then

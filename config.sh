@@ -3,7 +3,7 @@
 # Configuration file for Media Unlock Checker
 
 # Version
-VERSION='1.3.4'
+VERSION='1.4.0'
 
 # User-Agent strings (Updated to Chrome 131)
 UA_BROWSER="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
@@ -21,6 +21,7 @@ DISNEY_HOME_URL="https://disneyplus.com"
 DISNEY_BEARER_TOKEN="ZGlzbmV5JmJyb3dzZXImMS4wLjA.Cu56AgSfBTDag5NiRA81oLHkDZfu5L3CKadnefEAY84"
 
 HBOMAX_HOME_URL="https://www.max.com/"
+PRIMEVIDEO_HOME_URL="https://www.primevideo.com"
 
 # API Endpoints
 IP_INFO_API="http://ip-api.com/json"
@@ -39,6 +40,9 @@ NETFLIX_COOKIE="flwssn=d2c72c47-49e9-48da-b7a2-2dc6d7ca9fcf; nfvdid=BQFmAAEBEMZa
 DEFAULT_TIMEOUT=10
 DEFAULT_RETRY=3
 DEFAULT_MAX_TIME=20
+
+# Cookie data validation
+MIN_COOKIE_LENGTH=100
 
 # IPv6 support
 ENABLE_IPV6=1  # Set to 0 to disable IPv6 support
